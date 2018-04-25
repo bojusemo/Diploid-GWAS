@@ -1,4 +1,4 @@
-# Diploid GWAS
+# Diploid-GWAS
 
 An workflow for quality control, GWAS and post-GWAS analyses for diploid species.
 
