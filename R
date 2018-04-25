@@ -1,0 +1,1005 @@
+# Libraries
+library (GWASTools)
+library (plyr) 
+library(SNPRelate)
+library(ade4)
+library(rentrez)
+
+######### Manual inputing ########
+# Indicating the path where are stored the genotypes. The user has store all and only the compressed files provided by Illumina in a same folder. path.files is the pathname of this folder. 
+path.folders = "../Data"
+
+# Inputing phenotypes, pedigree and environmental conditions into the object Scan Annotation Data Frame. The files must to be ".csv" and have to be into the folder "Data".
+Scan_Annotation_Data_Frame = read.csv(file= "../Data/Scan Annotation Data Frame Toy Data.csv", header = TRUE, sep=",")
+
+# Indicating the number of autosomes of the specie
+autosomes <- 29
+
+#################
+
+# Extracting batch folders
+	# Vector of Illumina folders where there are inside Illumina files.
+Main_folders.zip = list.files(path.folders, pattern="/*.zip", recursive = TRUE, full.names = TRUE, include.dirs = FALSE)
+	# Extract_main_folders. Extracting the information of Illumina folders
+lapply(Main_folders.zip, 
+function(Main_folders) unzip ( Main_folders , exdir = path.folders))
+	# Vector of Illumina files
+files.zip = list.files(path.folders, pattern="/*.zip", recursive = TRUE, full.names = TRUE, include.dirs = FALSE)
+	# Extract_Illumina_files . Extracting the information of Illumina files
+lapply(files.zip, 
+function(files) unzip ( files , exdir = path.folders))
+
+# Inputing LocusSummary
+	# Creating function to read LocusSummary. 
+read_function_LocusSummary = function (file, rows) { # "rows" is the number of rows corresponding to header that have to be removed. By default are 2.
+if (missing(rows)) {
+read.csv(file=file, skip=2, header = TRUE, sep=",")} else {
+read.csv(file=file, skip=rows, header = TRUE, sep=",")}}
+	# Creating a list of "LocusSummary" files paths
+File_names_LocusSummary = list.files(path.folders, pattern="/*LocusSummary.csv", recursive = TRUE, full.names = TRUE, include.dirs = FALSE)
+	# Inputing "LocusSummary" 
+LocusSummary = lapply(File_names_LocusSummary, function(file) read_function_LocusSummary(file))
+
+
+# Inputing SNP Map
+	# Creating function to read SNP Map. "rows" is the number of rows corresponding to header that have to be removed. By default row is equal to 0.
+read_function_SNP_Map = function (file, rows) { 
+if (missing(rows)) {
+read.table(file=file, sep = "\t" , header = TRUE, check.names = FALSE, blank.lines.skip = TRUE, na.strings = "NA")} 
+else {
+read.table(file=file, sep = "\t" , header = TRUE, check.names = FALSE, blank.lines.skip = TRUE, na.strings = "NA", skip=rows)
+}}
+	# Making a list of "SNP_Map" files paths
+File_names_SNP_Map = list.files(path.folders, pattern="/*SNP_Map.txt", recursive = TRUE, full.names = TRUE, include.dirs = FALSE)
+	# Inputing "SNP_Map" files. 
+SNP_Map = lapply(File_names_SNP_Map, function(file) read_function_SNP_Map(file)) 
+
+# Inputig FinalReport.
+	# Creating function to read FinalReport. "rows" is the number of rows corresponding to header that have to be removed. By default are 10 because correspond to the header plus the column names. Column names are removed because have spaces that will be replace by symbol underscore (_).
+read_function_FinalReport = function (file, rows) { 
+if (missing(rows)) {
+read.table(file=file, sep = "\t" , header = TRUE, check.names = FALSE, blank.lines.skip = TRUE, na.strings = "NA", skip=9)} else {
+read.table(file=file, sep = "\t" , header = TRUE, check.names = FALSE, blank.lines.skip = TRUE, na.strings = "NA", skip=rows)}}
+	# list of "FinalReport" files paths
+File_names_FinalReport = list.files(path.folders, pattern="/*FinalReport.txt", recursive = TRUE, full.names = TRUE, include.dirs = FALSE) 
+	# Input "FinalReport" files
+FinalReport <- lapply(File_names_FinalReport, function(file) read_function_FinalReport(file))
+	# Merging all FinalReports
+FinalReport <- do.call("rbind", FinalReport)
+	# Remove SNP that are not in all the samples
+		# frequency of SNP Name
+freq_SNP <- as.data.frame(table(FinalReport$"SNP Name")) 
+		# list of SNPs in all frequency
+SNPs_in_all <- freq_SNP[freq_SNP$Freq >= length(unique(FinalReport$"Sample ID")),]
+		# Filter FinalReport
+FinalReport <- FinalReport[FinalReport$"SNP Name" %in% SNPs_in_all$Var1,]
+		# Export and import the information to avoid error...
+write.table(FinalReport, file = "FinalReport.txt")
+FinalReport <- read.table("FinalReport.txt", header = TRUE, na.strings = TRUE)
+
+
+# Inputing Sample Map
+	# Creating function to read Sample Map. "rows" is the number of rows corresponding to header that have to be removed. By default row is equal to 0.
+read_function_Sample_Map = function (file, rows) { 
+if (missing(rows)) {
+read.table(file=file, sep = "\t" , header = TRUE, check.names = FALSE, blank.lines.skip = TRUE, na.strings = "NA")} 
+else {
+read.table(file=file, sep = "\t" , header = TRUE, check.names = FALSE, blank.lines.skip = TRUE, na.strings = "NA", skip=rows)
+}}
+	# Making a list of "SNP_Map" files paths
+File_names_Sample_Map = list.files(path.folders, pattern="/*Sample_Map.txt", recursive = TRUE, full.names = TRUE, include.dirs = FALSE)
+	# Inputing "SNP_Map" files. 
+Sample_Map = lapply(File_names_Sample_Map, function(file) read_function_Sample_Map(file)) 
+
+
+# Inputing BAF and Log R Ratio
+	# Creating function to read BAF and Log R Ratio. "rows" is the number of rows corresponding to header that have to be removed. By default row is equal to 9.
+read_function_FinalReportCNV = function (file, rows) { 
+if (missing(rows)) {
+read.csv(file=file, skip=9, header = TRUE, sep=",")} else {
+read.csv(file=file, skip=rows, header = TRUE, sep=",")}}
+	# Creating a list of "FinalReportCNV" files paths
+File_names_FinalReportCNV = list.files(path.folders, pattern="/*FinalReportCNV.csv", recursive = TRUE, full.names = TRUE, include.dirs = FALSE)
+	# Inputing "FinalReportCNV"
+FinalReportCNV = lapply(File_names_FinalReportCNV, function(file) read_function_FinalReportCNV(file))
+	# Merging all FinalReports
+FinalReportCNV <- do.call("rbind", FinalReportCNV)
+	# Remove SNP that are not in all the samples
+		# Filter FinalReportCNV
+FinalReportCNV <- FinalReportCNV[FinalReportCNV$"SNP.Name" %in% SNPs_in_all$Var1,]
+		# Export and import the information to avoid error...
+write.table(FinalReportCNV, file = "FinalReportCNV.txt")
+FinalReportCNV <- read.table("FinalReportCNV.txt", header = TRUE, na.strings = TRUE)
+
+
+# Create a folder for outputs of results
+path_outputs <- "../Results"
+dir.create(path_outputs)
+
+# Creating GWASTools objects
+	# Creating the SNP Annotation Data Object
+merge_SNP_Map_and_LocusSummary <- merge(x = SNP_Map[[1]], y = LocusSummary[[1]], by.x = "Name", by.y = "Locus_Name")##### se usa el primero y todos se ajustan a ese. No es necesario incluir LocusSummary de cada bache. Igual se podrían posteriormente sacar estadísticas de ese archivo	
+		# Modifying chromosome nomenclature  
+Chromosome.vector <- merge_SNP_Map_and_LocusSummary[3]
+Chromosome.vector <- Chromosome.vector [,]
+Chromosome.vector <- as.character(Chromosome.vector)
+Chromosome.vector <- replace(Chromosome.vector,which(Chromosome.vector=="X"),autosomes+1)
+Chromosome.vector <- replace(Chromosome.vector,which(Chromosome.vector=="XY"),autosomes+2)
+Chromosome.vector <- replace(Chromosome.vector,which(Chromosome.vector=="Y"),autosomes+3)
+Chromosome.vector <- replace(Chromosome.vector,which(Chromosome.vector=="MT"),autosomes+4)
+			# Nomenclature for SNPs with unknown chromosome.
+Chromosome.vector <- replace(Chromosome.vector,which(!Chromosome.vector %in% 1:autosomes+4),autosomes+5)
+		# Creating the base data frame "snp_annot"
+snp_annot_data_frame <- data.frame(
+	snpName = merge_SNP_Map_and_LocusSummary$Name,
+	chromosome = as.integer (Chromosome.vector),
+	position = merge_SNP_Map_and_LocusSummary$Position,
+	alleleA = as.character(substr(merge_SNP_Map_and_LocusSummary$SNP, 2, 2)),
+	alleleB = as.character(substr(merge_SNP_Map_and_LocusSummary$SNP, 4, 4)),
+	BeadSetID = as.integer(merge_SNP_Map_and_LocusSummary$Illumicode_Name),
+	tAA = merge_SNP_Map_and_LocusSummary$AA_T_Mean,
+	tAB = merge_SNP_Map_and_LocusSummary$AB_T_Mean,
+	tBB = merge_SNP_Map_and_LocusSummary$BB_T_Mean,
+	rAA = merge_SNP_Map_and_LocusSummary$AA_R_Mean,
+	rAB = merge_SNP_Map_and_LocusSummary$AB_R_Mean,
+	rBB = merge_SNP_Map_and_LocusSummary$BB_R_Mean)
+
+		# Remove SNP that are not in all the samples
+			# Filter FinalReport
+snp_annot_data_frame <- snp_annot_data_frame[snp_annot_data_frame$"snpName" %in% SNPs_in_all$Var1,]
+			# Export and import the information to avoid error...
+write.table(snp_annot_data_frame, file = "snp_annot_data_frame.txt")
+snp_annot_data_frame <- read.table("snp_annot_data_frame.txt", header = TRUE, na.strings = TRUE)
+
+		# Crating snpID as an integer sorted by chromosome and position
+			# Sort snp_annot_data_frame by chromosome and then by position
+snp_annot_data_frame <- snp_annot_data_frame[order( snp_annot_data_frame$chromosome, snp_annot_data_frame$position ),]
+			# Crating snpID
+snpID = as.integer(c(1:nrow(snp_annot_data_frame)))
+		# Merge snpID whit snp_annot_data_frame
+snp_annot_data_frame_snpID <- data.frame(
+snpID = snpID,
+snp_annot_data_frame)
+		#  Creating the SNP Annotation Data Object.
+snpAnnot <- SnpAnnotationDataFrame(
+snp_annot_data_frame_snpID, 
+autosomeCode = 1:29L,
+XchromCode = 30L,
+XYchromCode = 31L,
+YchromCode = 32L,
+MchromCode = 33L)
+		# Following. Add metadata to describe the columns snpAnnot. The user provides this part
+meta <- varMetadata(snpAnnot)
+meta[c("snpID", "snpName", "chromosome", "position", "alleleA", "alleleB",
+"BeadSetID", "tAA", "tAB", "tBB", "rAA", "rAB", "rBB"),
+"labelDescription"] <- c("unique integer ID for SNPs, is the Index column of SNP_Map",
+"snpName of Illumina",
+paste("integer code for chromosome: 1:29=autosomes,",
+"30=X, 31=pseudoautosomal, 32=Y, 33=Mitochondrial, 34=Unknown"), 
+"base pair position on chromosome",
+"alelleA", "alleleB",
+"BeadSet ID from Illumina",
+"mean theta for AA cluster",
+"mean theta for AB cluster",
+"mean theta for BB cluster",
+"mean R for AA cluster",
+"mean R for AB cluster",
+"mean R for BB cluster")
+varMetadata(snpAnnot) <- meta
+
+
+	# Creating the Scan Annotation Data Object 
+		# Creating scanID. It has to be a unique identifier composed only for numbers.
+scanID <- as.numeric(c(row.names(Scan_Annotation_Data_Frame)))
+		# Merge scanID with the Scan_Annotation_Data_Frame
+Scan_Annotation_Data_Frame_scanID <- data.frame (scanID , Scan_Annotation_Data_Frame)
+		# Export and import scan.annotation
+write.table(Scan_Annotation_Data_Frame_scanID, file = "Scan_Annotation_Data_Frame_scanID.txt") 
+Scan_Annotation_Data_Frame_scanID  <- read.table("Scan_Annotation_Data_Frame_scanID.txt", header = TRUE, na.strings = TRUE)
+		# Assign a number of each origin
+genetic_origin_number <- Scan_Annotation_Data_Frame_scanID[3]
+genetic_origin_number <- genetic_origin_number [,]
+genetic_origin_number <- as.character(genetic_origin_number)
+genetic_origin_number <- replace(genetic_origin_number,which(genetic_origin_number=="genetic_origin_1"),1) #### hacerlo automático
+genetic_origin_number <- replace(genetic_origin_number,which(genetic_origin_number=="genetic_origin_2"),2)
+genetic_origin_number <- as.integer(genetic_origin_number)
+		# Unir data frame con el número asignado a cada origen
+Scan_Annotation_Data_Frame_origen <- data.frame ( Scan_Annotation_Data_Frame_scanID, "genetic_origin_number" = genetic_origin_number)
+		# Create a ScanAnnotationDataFrame  ############## EL USUARIO DEBE DAR ESTA PARTE
+scanAnnot <- ScanAnnotationDataFrame(Scan_Annotation_Data_Frame_origen)
+		# Add metadata to describe the columsns
+meta <- varMetadata(scanAnnot)
+meta[c("scanID", "subjectID", "genetic_origin", "sex", "batch", "Categorical_trait", "Continuous_trait",
+"genetic_origin_number"), "labelDescription"] <-
+c("unique ID for scans",
+"subject identifier (may have multiple scans)",
+"genetic origin group",
+"sex coded as M=male and F=female",
+"genotyping batch",
+"Categorical_trait",
+"Continuous_trait",
+"genetic_origin_number")
+varMetadata(scanAnnot) <- meta
+
+
+	# Creating GenotypeData
+		# Define a path to the raw data files
+path_GenotypeData <- paste(path.folders,"/GenotypeData", sep="") 
+dir.create(path_GenotypeData)
+		# Creating the name of the genotype GDS file
+geno.file <- "tmp.geno.gds"
+		# Creating a file by each sample
+			# Creating a data frame of scanID whit Sample.ID
+scanID_Sample.ID <- Scan_Annotation_Data_Frame_scanID [1:2]
+			# Making a data frame for each sample of FinalReport
+FinalReport_individual<-split(FinalReport, with(FinalReport, FinalReport[2])) 
+			# Making a data frame for each sample of FinalReportCNV
+FinalReportCNV_individual<-split(FinalReportCNV, with(FinalReportCNV, Sample.ID))
+			# Merging FinalReport whit FinalReportCNV 
+func_Merg_FinalReport_FinalReportCNV <- function(x,y){merge(x, y, by = c("Sample.ID", "SNP.Name"))}
+FinalReports <- mapply(func_Merg_FinalReport_FinalReportCNV, FinalReport_individual, FinalReportCNV_individual, SIMPLIFY=FALSE)
+			# Merging FinalReports whit scanID
+func_Merg_FinalReport_scanID <- function(x,y){merge(x, y, by.x="Sample.ID", by.y="subjectID")}
+FinalReport_scanID <- lapply(FinalReports, func_Merg_FinalReport_scanID, scanID_Sample.ID)
+			# Creating file names
+func_create_file_names <- function (x) {paste(path_GenotypeData,"/", x[1,"scanID"],".csv", sep="")}
+raw_data_file <- lapply(FinalReport_scanID, func_create_file_names)
+      # Creating files
+func_creat_files <- function (x,y) {write.csv(x, file = y)}
+mapply (func_creat_files, FinalReport_scanID, raw_data_file, SIMPLIFY=FALSE)
+      # Inputing and exporting files to avoid quotes in numbers when "scan" is used to create "diag.qxy" ############## mejorarlo en V6
+        # Creating function
+func_individual_files = function (file) {
+read.csv(file=file, colClasses = c("factor", "factor", "factor", NA,  NA,  NA,  NA,  NA,  NA,  NA,  NA,  NA,  NA,  NA, "factor"))}
+				# Creating list of file paths
+individual_files_paths <- list.files(path = paste(path.folders, "/GenotypeData", sep=""), pattern="*.csv", recursive = TRUE, full.names = TRUE, include.dirs = FALSE)
+				# Inputing files
+individual_files <- lapply(individual_files_paths, func_individual_files) 
+				# Creating file names
+individual_files_names <- lapply(individual_files, func_create_file_names)
+				#Exporting files
+mapply (func_creat_files, individual_files, individual_files_names, SIMPLIFY=FALSE)
+
+	# Creating function to read Sample Map. "rows" is the number of rows corresponding to header that have to be removed. By default row is equal to 0.
+read_function_Sample_Map = function (file, rows) { 
+if (missing(rows)) {
+read.table(file=file, sep = "\t" , header = TRUE, check.names = FALSE, blank.lines.skip = TRUE, na.strings = "NA")} 
+else {
+read.table(file=file, sep = "\t" , header = TRUE, check.names = FALSE, blank.lines.skip = TRUE, na.strings = "NA", skip=rows)
+}}
+	# Making a list of "SNP_Map" files paths
+File_names_Sample_Map = list.files(path.folders, pattern="/*Sample_Map.txt", recursive = TRUE, full.names = TRUE, include.dirs = FALSE)
+	# Inputing "SNP_Map" files. 
+Sample_Map = lapply(File_names_Sample_Map, function(file) read_function_Sample_Map(file)) 
+		# Creating scan.annotation
+scan.annotation	 <- data.frame(scanID = scanID_Sample.ID$scanID,
+scanName = scanID_Sample.ID$subjectID,
+file = paste(scanID_Sample.ID$scanID,".csv", sep=""))
+scan.annotation <- scan.annotation[order(scan.annotation$scanID),] 
+		# Creating snp.annotation
+snp.annotation <- snp_annot_data_frame_snpID[,c("snpID", "snpName", "chromosome", "position")]
+snp.annotation <- snp.annotation[order(snp.annotation$snpID),] 
+		# Creating col.nums
+col.nums <- as.integer(c(3,4,9,10))
+names(col.nums) <- c("sample", "snp", "a1", "a2")
+		# Creating name of the output file to save diagnostics.
+diag.geno.file <- "diag.geno.RData"
+		# Creating Data File  
+diag.geno <- createDataFile (path = path_GenotypeData,
+filename = geno.file,
+file.type= "gds",
+variables = "genotype",
+snp.annotation = snp.annotation, 
+scan.annotation = scan.annotation,
+sep.type = ",",
+skip.num = 1,
+col.total = 16,
+col.nums = col.nums,
+scan.name.in.file = 0,
+diagnostics.filename = diag.geno.file,
+verbose = FALSE)
+
+	# Intensity Files
+qxy.file <- "tmp.qxy.gds"
+col.nums <- as.integer(c(3,4,11,12,13))
+names(col.nums) <- c("sample", "snp", "quality", "X", "Y")
+diag.qxy.file <- "diag.qxy.RData"
+diag.qxy <- createDataFile(path = path_GenotypeData,
+filename = qxy.file,
+file.type = "gds",
+variables = c("quality","X","Y"),
+snp.annotation = snp.annotation,
+scan.annotation = scan.annotation,
+sep.type = ",",
+skip.num = 1,
+col.total = 16, 
+col.nums = col.nums,
+scan.name.in.file = 0,
+diagnostics.filename = diag.qxy.file,
+verbose = FALSE)
+
+	# Creating the BAF and LRR file
+bl.file <- "tmp.bl.gds"
+col.nums <- as.integer(c(3,4,14,15))
+names(col.nums) <- c("sample", "snp", "BAlleleFreq", "LogRRatio")
+diag.bl.file <- "diag.bl.RData"
+diag.bl <- createDataFile(path = path_GenotypeData,
+filename = bl.file,
+file.type = "gds",
+variables = c("BAlleleFreq","LogRRatio"),
+snp.annotation = snp.annotation,
+scan.annotation = scan.annotation,
+sep.type = ",",
+skip.num = 1,
+col.total = 16,
+col.nums = col.nums,
+scan.name.in.file = 0,
+diagnostics.filename = diag.bl.file,
+verbose = FALSE)
+
+	# Creating genoData. It is a combination of GenotypeReader with SNP and Scan annotation
+		# Initializing GdsGenotypeReader file
+(gds <- GdsGenotypeReader(geno.file))
+		# Changing chromosome codes from human to cattle
+gds@autosomeCode <- as.integer(c(1:29))
+gds@XchromCode <- as.integer(30)
+gds@XYchromCode <- as.integer(31)
+gds@YchromCode <- as.integer(32)
+gds@MchromCode <- as.integer(33)
+		# Creating genoData
+genoData <- GenotypeData(gds, snpAnnot=snpAnnot, scanAnnot=scanAnnot)
+
+	# Creating IntensityData. It is a combination of IntensityReader with SNP and Scan annotation
+		# Initializing GdsGenotypeReader file
+(gds <- GdsIntensityReader(qxy.file))
+		# Changing chromosome codes from human to cattle
+gds@autosomeCode <- as.integer(c(1:29))
+gds@XchromCode <- as.integer(30)
+gds@XYchromCode <- as.integer(31)
+gds@YchromCode <- as.integer(32)
+gds@MchromCode <- as.integer(33)
+		# Creating IntensityData
+qxyData <- IntensityData(gds, snpAnnot=snpAnnot, scanAnnot=scanAnnot)
+close(gds)
+
+	# Creating BAF/LRR
+		# Initializing GdsGenotypeReader file
+(gds <- GdsIntensityReader(bl.file))
+		# Changing chromosome codes from human to cattle
+gds@autosomeCode <- as.integer(c(1:29))
+gds@XchromCode <- as.integer(30)
+gds@XYchromCode <- as.integer(31)
+gds@YchromCode <- as.integer(32)
+gds@MchromCode <- as.integer(33)
+blData <- IntensityData(gds, snpAnnot=snpAnnot, scanAnnot=scanAnnot)
+close(blData)
+
+
+######### Quality control
+
+# Batch Quality Checks 
+  # Create a folders for Batch Quality Checks outputs
+path_Batch_Quality_Checks <- paste(path_outputs,"/Batch_Quality_Checks", sep="") 
+dir.create(path_Batch_Quality_Checks)
+Missing_call_rate_before_filtering <- paste(path_Batch_Quality_Checks,"/Missing_call_rate_before_filtering", sep="") 
+dir.create(Missing_call_rate_before_filtering)
+Missing_call_rate_after_filtering <- paste(path_Batch_Quality_Checks,"/Missing_call_rate_after_filtering", sep="") 
+dir.create(Missing_call_rate_after_filtering)
+
+	# Calculate Missing Call Rate for Samples and SNPs
+		# Calculate missing.n1
+			# Calculate the number of missing calls for each snp over all samples for each sex separately
+miss <- missingGenotypeBySnpSex(genoData)
+			# Add missing.n1 to snpAnnot object
+snpAnnot$missing.n1 <- miss$missing.fraction
+varMetadata(snpAnnot)["missing.n1", "labelDescription"] <- paste(
+"fraction of genotype calls missing over all samples",
+"except that females are excluded for Y chr SNPs")
+			# Generating results: 
+				# 1. Missing counts for each SNP				
+					# Create a column with snpID
+missing.counts <- data.frame(miss$missing.counts)
+missing.counts <- data.frame (snpID=as.integer(rownames(missing.counts)), missing.counts)
+					# Merge with snpName
+missing.counts <- merge (x = snp_annot_data_frame_snpID[1:2], y =missing.counts, by = "snpID") 
+					# Writing the report
+write.table(missing.counts, file = paste (Missing_call_rate_before_filtering, "/01. Missing_counts_for_each_SNP.txt", sep=""), sep = " ",
+            eol = "\n", na = "NA", dec = ".", row.names = FALSE,
+            col.names = TRUE, qmethod = c("escape", "double"),
+            fileEncoding = "")
+				# 2. Sex counts
+write.table(data.frame(miss$scans.per.sex), file = paste (Missing_call_rate_before_filtering, "/02. scans_per_sex.txt", sep=""), sep = " ",
+            eol = "\n", na = "NA", dec = ".", row.names = TRUE,
+            col.names = TRUE, qmethod = c("escape", "double"),
+            fileEncoding = "")
+				# 3. Fraction of missing calls for each SNP
+					# Create a column with snpID
+missing.fraction <- data.frame(missing.fraction = miss$missing.fraction)
+missing.fraction <- data.frame (snpID=as.integer(rownames(missing.fraction)), missing.fraction)
+					# Merge with snpName
+missing.fraction <- merge (x = snp_annot_data_frame_snpID[1:2], y =missing.fraction, by = "snpID") 
+					# Writing the report
+write.table(missing.fraction, file = paste (Missing_call_rate_before_filtering, "/03. Fraction_of_missing_calls_for_each_SNP.txt", sep=""), sep = " ",
+            eol = "\n", na = "NA", dec = ".", row.names = FALSE,
+            col.names = TRUE, qmethod = c("escape", "double"),
+            fileEncoding = "")
+				# 4. Proportion of SNPs above missing call rate by chromosome.
+					# Calculating value for each chromosome. The user can modify the cutoff
+            # Making the function.
+func_proportion_of_SNPs_above_missing_call_rate <- function(Chromosome, cutoof) {
+  length(snpAnnot$missing.n1[snpAnnot$chromosome==Chromosome][snpAnnot$missing.n1[snpAnnot$chromosome==Chromosome] < cutoof]) / length(snpAnnot$missing.n1[snpAnnot$chromosome==Chromosome])
+}
+            # Applying the function.
+proportion_of_SNPs_above_missing_call_rate <- sapply(seq( from=1, to = length(unique(snpAnnot$chromosome))+1), func_proportion_of_SNPs_above_missing_call_rate, cutoof=0.05)
+					# Making the data frame
+proportion_of_SNPs_above_missing_call_rate <-data.frame(
+"chromosome" = seq( from=1, to = length(unique(snpAnnot$chromosome))+1),
+"proportion_of_SNPs_above_missing_call_rate" = proportion_of_SNPs_above_missing_call_rate)
+					# Writing the report
+write.table(proportion_of_SNPs_above_missing_call_rate, file = paste (Missing_call_rate_before_filtering, "/04. proportion_of_SNPs_above_missing_call_rate_by_chromosome.txt", sep=""), sep = " ",
+            eol = "\n", na = "NA", dec = ".", row.names = FALSE,
+            col.names = TRUE, qmethod = c("escape", "double"),
+            fileEncoding = "")
+				# 5. Print and store a PDF whit the histogram of Missing Call Rate for All Probes
+set.seed(1)
+pdf(paste (Missing_call_rate_before_filtering, "/05. hist_Missing_Call_Rate_for_All_Probes.pdf", sep=""), 7, 5)
+hist(snpAnnot$missing.n1, ylim=c(0,30000), xlab="SNP missing call rate", main="Missing Call Rate for All Probes") # Límite de 30.000 que sea en automático el número de SNPs del microarreglo
+dev.off()
+
+		# Calculate missing.e1
+			# Calculate the missing call rate per sample
+snpexcl <- snpAnnot$snpID[snpAnnot$missing.n1 == 1]
+miss <- missingGenotypeByScanChrom(genoData, snp.exclude=snpexcl)
+			# Add the missing call rates vector to the sample annotation file
+scanAnnot$missing.e1 <- miss$missing.fraction
+varMetadata(scanAnnot)["missing.e1", "labelDescription"] <- paste(
+"fraction of genotype calls missing over all snps with missing.n1<1",
+"except that Y chr SNPs are excluded for females")
+			# Calculating and storing in the annotation file, the missing call rate for autosomes and the X chromosome in a separated way.
+auto <- colnames(miss$missing.counts) %in% 1:29
+missa <- rowSums(miss$missing.counts[,auto]) / sum(miss$snps.per.chr[auto])
+missx <- miss$missing.counts[,"X"] / miss$snps.per.chr["X"]
+scanAnnot$miss.e1.auto <- missa
+scanAnnot$miss.e1.xchr <- missx
+			#  Creating ans storing a logical duplicated variable, where there can be identify the duplicated scans.
+scanAnnot <- scanAnnot[order(scanAnnot$subjectID, scanAnnot$missing.e1),]
+scanAnnot$duplicated <- duplicated(scanAnnot$subjectID)
+				# Put scanAnnot back in scanID order
+scanAnnot <- scanAnnot[order(scanAnnot$scanID),]
+varMetadata(scanAnnot)["duplicated", "labelDescription"] <- "TRUE for duplicate scan with higher missing.e1"
+			# Generating results: 
+				# 6. Missing counts per sample by chromosome. In this work was verified that negative control samples (Bv1920101G) had much more missing counts by chromosome than normal samples of its same batch.
+					# Create a column with scanID
+missing.counts.sample.chromosome <- data.frame (miss$missing.counts)
+missing.counts.sample.chromosome <- data.frame (scanID=as.integer(rownames(missing.counts.sample.chromosome)), missing.counts.sample.chromosome)
+					# Merge with subjectID
+missing.counts.sample.chromosome <- merge (x = Scan_Annotation_Data_Frame_scanID[1:2], y =missing.counts.sample.chromosome, by = "scanID") 
+					# Writing the report
+write.table(missing.counts.sample.chromosome, file = paste (Missing_call_rate_before_filtering, "/06. Missing_counts_per_sample_by_chromosome.txt", sep=""), sep = " ", eol = "\n", na = "NA", dec = ".", row.names = FALSE, col.names = TRUE, qmethod = c("escape", "double"), fileEncoding = "")
+				# 7. Missing per chromosome in all samples
+missing.counts.chromosome <- data.frame (miss$snps.per.chr)
+missing.counts.chromosome <- data.frame (chromosome=rownames(missing.counts.chromosome), missing.counts.chromosome)
+					# Writing the report
+write.table(missing.counts.chromosome, file = paste (Missing_call_rate_before_filtering, "/07. Missing_counts_per_chromosome_in_all_samples.txt", sep=""), sep = " ", eol = "\n", na = "NA", dec = ".", row.names = FALSE, col.names = TRUE, qmethod = c("escape", "double"), fileEncoding = "")
+				# 8. Fraction of missing calls over all chromosomes
+missing.fraction <- data.frame (miss$missing.fraction)
+missing.fraction <- data.frame (scanID=as.integer(rownames(missing.fraction)), missing.fraction)
+					# Merge with subjectID
+missing.fraction <- merge (x = Scan_Annotation_Data_Frame_scanID[1:2], y =missing.fraction, by = "scanID") 
+					# Writing the report
+write.table(missing.fraction, file = paste (Missing_call_rate_before_filtering, "/08. Fraction_of_missing_calls_over_all_chromosomes.txt", sep=""), sep = " ", eol = "\n", na = "NA", dec = ".", row.names = FALSE, col.names = TRUE, qmethod = c("escape", "double"), fileEncoding = "")
+				# 9. Print and store a PDF whit the histogram of sample missing call rate
+set.seed(1)
+pdf(paste (Missing_call_rate_before_filtering, "/09. hist_sample_missing_call_rate.pdf", sep=""), 7, 5)
+hist(scanAnnot$missing.e1, xlab="Fraction of missing calls over all probes", main="Histogram of Sample Missing Call Rate for all Samples")
+dev.off()
+
+		# Calculate missing.n2
+scan.exclude <- scanAnnot$scanID[scanAnnot$missing.e1 > 0.05]
+miss <- missingGenotypeBySnpSex(genoData, scan.exclude=scan.exclude)
+snpAnnot$missing.n2 <- miss$missing.fraction
+varMetadata(snpAnnot)["missing.n2", "labelDescription"] <- paste("fraction of genotype calls missing over all samples with missing.e1<0.05",
+"except that females are excluded for Y chr SNPs")
+			# Generating results: 
+				# 1. Missing counts for each SNP				
+					# Create a column with snpID
+missing.counts <- data.frame(miss$missing.counts)
+missing.counts <- data.frame (snpID=as.integer(rownames(missing.counts)), missing.counts)
+					# Merge with snpName
+missing.counts <- merge (x = snp_annot_data_frame_snpID[1:2], y =missing.counts, by = "snpID") 
+					# Writing the report
+write.table(missing.counts, file = paste (Missing_call_rate_after_filtering, "/01. Missing_counts_for_each_SNP.txt", sep=""), sep = " ",
+            eol = "\n", na = "NA", dec = ".", row.names = FALSE,
+            col.names = TRUE, qmethod = c("escape", "double"),
+            fileEncoding = "")
+				# 2. Sex counts
+write.table(data.frame(miss$scans.per.sex), file = paste (Missing_call_rate_after_filtering, "/02. scans_per_sex.txt", sep=""), sep = " ",
+            eol = "\n", na = "NA", dec = ".", row.names = TRUE,
+            col.names = TRUE, qmethod = c("escape", "double"),
+            fileEncoding = "")
+				# 3. Fraction of missing calls for each SNP
+					# Create a column with snpID
+missing.fraction <- data.frame(missing.fraction = miss$missing.fraction)
+missing.fraction <- data.frame (snpID=as.integer(rownames(missing.fraction)), missing.fraction)
+					# Merge with snpName
+missing.fraction <- merge (x = snp_annot_data_frame_snpID[1:2], y =missing.fraction, by = "snpID") 
+					# Writing the report
+write.table(missing.fraction, file = paste (Missing_call_rate_after_filtering, "/03. Fraction_of_missing_calls_for_each_SNP.txt", sep=""), sep = " ", eol = "\n", na = "NA", dec = ".", row.names = FALSE, col.names = TRUE, qmethod = c("escape", "double"), fileEncoding = "")
+				# 4. Proportion of SNPs above missing call rate by chromosome.
+          # Calculating value for each chromosome. The user can modify the cutoff
+            # Making the function.
+func_proportion_of_SNPs_above_missing_call_rate <- function(Chromosome, cutoof) {
+  length(snpAnnot$missing.n1[snpAnnot$chromosome==Chromosome][snpAnnot$missing.n1[snpAnnot$chromosome==Chromosome] < cutoof]) / length(snpAnnot$missing.n1[snpAnnot$chromosome==Chromosome])
+  }
+            # Applying the function.
+proportion_of_SNPs_above_missing_call_rate <- sapply(seq( from=1, to = length(unique(snpAnnot$chromosome))+1), func_proportion_of_SNPs_above_missing_call_rate, cutoof=0.05)
+          # Making the data frame
+proportion_of_SNPs_above_missing_call_rate <-data.frame(
+  "chromosome" = seq( from=1, to = length(unique(snpAnnot$chromosome))+1),
+  "proportion_of_SNPs_above_missing_call_rate" = proportion_of_SNPs_above_missing_call_rate)
+          # Writing the report
+write.table(proportion_of_SNPs_above_missing_call_rate, file = paste (Missing_call_rate_after_filtering, "/04. proportion_of_SNPs_above_missing_call_rate_by_chromosome.txt", sep=""), sep = " ",
+            eol = "\n", na = "NA", dec = ".", row.names = FALSE,
+            col.names = TRUE, qmethod = c("escape", "double"),
+            fileEncoding = "")
+				# 5. Print and store a PDF whit the histogram of Missing Call Rate for All Probes
+set.seed(1)
+pdf(paste (Missing_call_rate_after_filtering, "/05. hist_Missing_Call_Rate_for_All_Probes.pdf", sep=""), 7, 5)
+hist(snpAnnot$missing.n2, ylim=c(0,30000), xlab="SNP missing call rate", main="Missing Call Rate for Probes after Filtering") # Límite de 30.000 que sea en automático el número de SNPs del microarreglo
+dev.off()
+
+		# Calculate missing.e2
+			# Create a vector of the SNPs to exclude.
+snpexcl <- snpAnnot$snpID[snpAnnot$missing.n2 >= 0.05]
+miss <- missingGenotypeByScanChrom(genoData, snp.exclude=snpexcl)
+			# Add the missing call rates vector to the sample annotation file
+scanAnnot$missing.e2 <- miss$missing.fraction
+varMetadata(scanAnnot)["missing.e2", "labelDescription"] <- paste(
+"fraction of genotype calls missing over all snps with missing.n2<0.05",
+"except that Y chr SNPs are excluded for females")
+			# Generating results: 
+				# 6. Missing counts per sample by chromosome.
+					# Create a column with scanID
+missing.counts.sample.chromosome <- data.frame (miss$missing.counts)
+missing.counts.sample.chromosome <- data.frame (scanID=as.integer(rownames(missing.counts.sample.chromosome)), missing.counts.sample.chromosome)
+					# Merge with subjectID
+missing.counts.sample.chromosome <- merge (x = Scan_Annotation_Data_Frame_scanID[1:2], y =missing.counts.sample.chromosome, by = "scanID") 
+					# Writing the report
+write.table(missing.counts.sample.chromosome, file = paste (Missing_call_rate_after_filtering, "/06. Missing_counts_per_sample_by_chromosome.txt", sep=""), sep = " ", eol = "\n", na = "NA", dec = ".", row.names = FALSE, col.names = TRUE, qmethod = c("escape", "double"), fileEncoding = "")
+				# 7. Missing per chromosome in all samples
+missing.counts.chromosome <- data.frame (miss$snps.per.chr)
+missing.counts.chromosome <- data.frame (chromosome=rownames(missing.counts.chromosome), missing.counts.chromosome)
+					# Writing the report
+write.table(missing.counts.chromosome, file = paste (Missing_call_rate_after_filtering, "/07. Missing_counts_per_chromosome_in_all_samples.txt", sep=""), sep = " ", eol = "\n", na = "NA", dec = ".", row.names = FALSE, col.names = TRUE, qmethod = c("escape", "double"), fileEncoding = "")
+				# 8. Fraction of missing calls over all chromosomes
+missing.fraction <- data.frame (miss$missing.fraction)
+missing.fraction <- data.frame (scanID=as.integer(rownames(missing.fraction)), missing.fraction)
+					# Merge with subjectID
+missing.fraction <- merge (x = Scan_Annotation_Data_Frame_scanID[1:2], y =missing.fraction, by = "scanID") 
+					# Writing the report
+write.table(missing.fraction, file = paste (Missing_call_rate_after_filtering, "/08. Fraction_of_missing_calls_over_all_chromosomes.txt", sep=""), sep = " ", eol = "\n", na = "NA", dec = ".", row.names = FALSE, col.names = TRUE, qmethod = c("escape", "double"), fileEncoding = "")
+				# 9. Print and store a PDF whit the histogram of sample missing call rate. Rreate a histogram of the overall missing call rate per sample in order to identify any samples with a relatively larger missing call rate.
+set.seed(1)
+pdf(paste (Missing_call_rate_after_filtering, "/09. hist_sample_missing_call_rate.pdf", sep=""), 7, 5)
+hist(scanAnnot$missing.e2, xlab="Fraction of missing calls over all probes with missing call rate < 0.05", main="Histogram of Sample Missing Call Rate for all Samples")
+dev.off()
+
+	# Missing Call Rates per Batch 
+		# Plot the distribution of the number of samples per batch.
+set.seed(1)
+pdf(paste (path_Batch_Quality_Checks, "/01. Number_of_samples_per_batch.pdf", sep=""), 7, 5)
+barplot(table(scanAnnot$batch), ylab="Number of Samples", xlab="Batch", main="Distribution of Samples per Batch")
+dev.off()
+
+	# Mean missing call rate per batch for all SNPs
+		# "This test can identify any batch outliers with regard to missing call rate for samples in a given batch". First is performing a linear regression for the mean missing call rate per batch on the number of samples per batch. Then is plotting the mean missing call rate against the number of samples in the batch using the results from the ANOVA as slope of the regression line.
+batches <- unique(scanAnnot$batch)
+bmiss <- rep(NA,length(batches)); names(bmiss) <- batches
+bn <- rep(NA,length(batches)); names(bn) <- batches
+for(i in 1:length(batches)) {
+x <- scanAnnot$missing.e1[is.element(scanAnnot$batch, batches[i])]
+bmiss[i] <- mean(x)
+bn[i] <- length(x)
+}
+y <- lm(bmiss ~ bn)
+    
+		# Export Anova
+capture.output(anova(y), file=paste (path_Batch_Quality_Checks, "/02. ANOVA - Mean missing call rate per batch for all SNPs.txt", sep=""))
+		  # Export plot
+set.seed(1)
+pdf(paste (path_Batch_Quality_Checks, "/02. Plot - Mean missing call rate per batch for all SNPs.pdf", sep=""), 7, 5)
+plot(bn, bmiss, xlab="Number of samples per batch", ylab="Mean missing call rate", main="Mean Missing Call Rate vs\nSamples per Batch")
+abline(y$coefficients)
+dev.off()
+
+	# Association between batches and population groups
+res <- batchChisqTest(genoData, batchVar="batch", return.by.snp=TRUE)
+close(genoData)
+x <- table(scanAnnot$genetic_origin, scanAnnot$batch)
+chisq <- chisq.test(x)
+chisq$p.value
+		# Calculate the fraction of samples in each batch that are from genetic_origin_1. 
+batches <- unique(scanAnnot$batch)
+eth <- rep(NA,length(batches)); names(eth) <- sort(batches)
+for(i in 1:length(batches)){  
+x <- scanAnnot$genetic_origin[is.element(scanAnnot$batch, batches[i])]
+xl <- length(x[x == "genetic_origin_1"])
+eth[i] <- xl / length(x)
+}
+allequal(names(eth), names(res$mean.chisq))
+		# Export. Plot the average Chi-Square test statistic against the fraction of samples that are from genetic_origin_1
+set.seed(1)
+pdf(paste (path_Batch_Quality_Checks, "/03. Association between batches and population groups.pdf", sep=""), 7, 5)
+plot(eth, res$mean.chisq, xlab="Fraction of samples from genetic_origin_1 per Batch",
+ylab="Average Chi-square Test Statistic",
+main="Fraction of samples from genetic_origin_1 per Batch
+vs Average Chi-square Test Statistic")
+abline(v=mean(eth), lty=2, col="red")
+dev.off()
+
+
+# Sample Quality Checks
+	# Create a folders
+Sample_Quality_Checks <- paste(path_outputs,"/Sample_Quality_Checks", sep="") 
+dir.create(Sample_Quality_Checks)
+Sample_genotype_quality_scores <- paste(Sample_Quality_Checks,"/Sample_genotype_quality_scores", sep="") 
+dir.create(Sample_genotype_quality_scores)
+B_Allele_Frequency_variance_analysis <- paste(Sample_Quality_Checks,"/B_Allele_Frequency_variance_analysis", sep="") 
+dir.create(B_Allele_Frequency_variance_analysis)
+sample_missingness_and_heterozygosities <- paste(Sample_Quality_Checks,"/sample_missingness_and_heterozygosities", sep="") 
+dir.create(sample_missingness_and_heterozygosities)
+
+	# Checking for outliers in quality score
+qualGDS <- GdsIntensityReader(qxy.file)
+qualGDS@autosomeCode <- as.integer(c(1:29))
+qualGDS@XchromCode <- as.integer(30)
+qualGDS@XYchromCode <- as.integer(31)
+qualGDS@YchromCode <- as.integer(32)
+qualGDS@MchromCode <- as.integer(33)
+qualData <- IntensityData(qualGDS, scanAnnot=scanAnnot)
+genoGDS <- GdsGenotypeReader(geno.file)
+genoGDS@autosomeCode <- as.integer(c(1:29))
+genoGDS@XchromCode <- as.integer(30)
+genoGDS@XYchromCode <- as.integer(31)
+genoGDS@YchromCode <- as.integer(32)
+genoGDS@MchromCode <- as.integer(33)
+genoData <- GenotypeData(genoGDS, scanAnnot=scanAnnot)
+qual.results <- qualityScoreByScan(qualData, genoData)
+close(qualData)
+set.seed(1)
+pdf(paste (Sample_genotype_quality_scores, "/01. Median Genotype Quality Scores of Samples.pdf", sep=""), 7, 5)
+hist(qual.results[,"median.quality"], main="Median Genotype Quality Scores of Samples", xlab="Median Quality")
+abline(v=mean(eth), lty=2, col="red")
+dev.off()
+	# B Allele Frequency variance analysis
+		# Creating a list of matrices, with one matrix for each chromosome containing the standard deviation of BAF at each window in each scan
+blGDS <- GdsIntensityReader(bl.file)
+blGDS@autosomeCode <- as.integer(c(1:29))
+blGDS@XchromCode <- as.integer(30)
+blGDS@XYchromCode <- as.integer(31)
+blGDS@YchromCode <- as.integer(32)
+blGDS@MchromCode <- as.integer(33)
+blData <- IntensityData(blGDS, snpAnnot=snpAnnot, scanAnnot=scanAnnot)
+nbins <- rep(12, 30) 
+slidingBAF12 <- sdByScanChromWindow(blData, genoData, nbins=nbins)
+		# Calculating mean and standard deviation of the BAF standard deviations in each window in each chromosome over all samples
+sds.chr <- meanSdByChromWindow(slidingBAF12, scanAnnot$sex)
+		# "Next, identify windows within sample-chromosome pairs that have very high BAF standard deviations compared to the same window in other samples." There are the sample-chromosome 4 standard deviation above mean.
+res12bin4sd <- findBAFvariance(sds.chr, slidingBAF12, scanAnnot$sex, sd.threshold=3)
+		# Exporting unusually high BAF standard deviation sample-chromosome
+unusually_high_BAF_sd <- data.frame (res12bin4sd)
+write.table(unusually_high_BAF_sd, file = paste (B_Allele_Frequency_variance_analysis, "/01. unusually high BAF standard deviation sample-chromosome", sep=""), sep = " ", eol = "\n", na = "NA", dec = ".", row.names = FALSE, col.names = TRUE, qmethod = c("escape", "double"), fileEncoding = "")
+		# Exporting plot of the BAF of all SNPs on unusually high BAF standard deviation chromosome-sample pairs against position
+scanID <- as.integer(res12bin4sd[, "scanID"])
+chrom <- as.integer(res12bin4sd[, "chromosome"])
+chrom[res12bin4sd[, "chromosome"] == "X"] <- 30
+bincode <- paste("Bin", res12bin4sd[, "bin"], sep = " ")
+set.seed(1)
+pdf(paste (B_Allele_Frequency_variance_analysis, "/02. BAF of all SNPs on unusually high BAF standard deviation sample-chromosome.pdf", sep=""), 7, 5)
+chromIntensityPlot(blData, scanID, chrom, info=bincode, ideogram=FALSE)
+dev.off()
+
+	# Missingness and heterozygosity within samples
+	# "Identification of samples that may have relatively high heterozygosity for all chromosomes indicate a possible mixed sample. Further, one can identify any outliers with regard to missingness. Plotting by chromosome enables visualization of chromosomal artifacts on a particular subset of SNPs that lie on a chromosome."	
+miss <- missingGenotypeByScanChrom(genoData)
+miss.rate <- t(apply(miss$missing.counts, 1, function(x) {x / miss$snps.per.chr}))
+miss.rate <- as.data.frame(miss.rate)
+cols <- names(miss.rate) %in% c(1:29, "X", "XY", "Y", "M", "U")
+set.seed(1)
+pdf(paste (sample_missingness_and_heterozygosities, "/01. Missingness by Chromosome.pdf", sep=""), 7, 5)
+boxplot(miss.rate[,cols], main="Missingness by Chromosome", ylab="Proportion Missing", xlab="Chromosome")
+dev.off()
+set.seed(1)
+pdf(paste (sample_missingness_and_heterozygosities, "/02. X Chromosome Missingness by Sex.pdf", sep=""), 7, 5)
+boxplot(miss.rate$X ~ scanAnnot$sex, main="X Chromosome Missingness by Sex", ylab="Proportion Missing")
+dev.off()
+
+		# Calculate heterozygosity by scan by chromosome
+het.results <- hetByScanChrom(genoData)
+close(genoData)
+
+			# Write autosomal and X chr heterozygosity to sample annot. High heterozygosity outliers could be due to sample contamination, while low heterozygosity may due to chromosomal anomalies.
+scanAnnot$het.A <- het.results[,"A"]
+scanAnnot$het.X <- het.results[,"X"]
+varMetadata(scanAnnot)["het.A", "labelDescription"] <- "fraction of heterozygotes for autosomal SNPs"
+varMetadata(scanAnnot)["het.X", "labelDescription"] <- "fraction of heterozygotes for X chromosome SNPs"
+set.seed(1)
+pdf(paste (sample_missingness_and_heterozygosities, "/03. Autosomal Heterozygosity.pdf", sep=""), 7, 5)
+boxplot(scanAnnot$het.A ~ scanAnnot$genetic_origin, main="Autosomal Heterozygosity")
+dev.off()
+set.seed(1)
+pdf(paste (sample_missingness_and_heterozygosities, "/04. X Chromosome Heterozygosity in Females.pdf", sep=""), 7, 5)
+female <- scanAnnot$sex == "F"
+boxplot(scanAnnot$het.X[female] ~ scanAnnot$genetic_origin[female], main="X Chromosome Heterozygosity in Females")
+dev.off()
+
+# Sample Identity Checks
+# "This step performs a series of identity checks on the samples. First, samples are analyzed to determine if there exist any discrepancies between the annotated sex and genetic sex in the sample. Next, the relatedness among samples is investigated through IBD estimation. Finally, the samples are checked for potential population substructure, which if unidentified can threaten the validity of subsequent analyses.
+	# Create a folders
+Sample_Identity_Checks <- paste(path_outputs,"/Sample_Identity_Checks", sep="") 
+dir.create(Sample_Identity_Checks)
+Misannotated_Sex_Check <- paste(Sample_Identity_Checks,"/Mis-annotated_Sex_Check", sep="") 
+dir.create(Misannotated_Sex_Check)
+	# Mis-annotated Sex Check
+	# The objective is to identify any sex mis-annotation or sex chromosome aneuploidies. "The fourth plot applies to annotated females only, since males are expected to have zero heterozygosity on the X chromosome."
+intenGDS <- GdsIntensityReader(qxy.file)
+intenGDS@autosomeCode<- as.integer(c(1:29))
+intenGDS@XchromCode <- as.integer(30)
+intenGDS@XYchromCode <- as.integer(31)
+intenGDS@YchromCode <- as.integer(32)
+intenGDS@MchromCode <- as.integer(33)
+inten.by.chrom <- meanIntensityByScanChrom(intenGDS)
+close(intenGDS)
+mninten <- inten.by.chrom[[1]]
+xcol <- rep(NA, nrow(scanAnnot))
+xcol[scanAnnot$sex == "M"] <- "blue"
+xcol[scanAnnot$sex == "F"] <- "red"
+nx <- sum(snpAnnot$chromosome == 30) 
+ny <- sum(snpAnnot$chromosome == 32) 
+		#All intensities
+x1 <-mninten[,"X"]; y1 <- mninten[,"Y"]
+main1 <- "Mean X vs \nMean Y Chromosome Intensity"
+		#Het on X vs X intensity
+x2 <- mninten[,"X"]; y2 <- scanAnnot$het.X
+main2 <- "Mean X Chromosome Intensity vs
+Mean X Chromosome Heterozygosity"
+		# Het on X vs Y intensity
+y3 <- mninten[,"Y"]; x3 <- scanAnnot$het.X
+main3 <- "Mean X Chromosome Heterozygosity vs
+Mean Y Chromosome Intensity"
+		# X vs A het
+x4 <- scanAnnot$het.A[scanAnnot$sex == "F"]
+y4 <- scanAnnot$het.X[scanAnnot$sex == "F"]
+main4 <- "Mean Autosomal Heterozygosity vs
+Mean X Chromosome Heterozygosity"
+cols <- c("blue","red")
+mf <- c("male", "female")
+xintenlab <- paste("X intensity (n=", nx, ")", sep="")
+yintenlab <- paste("Y intensity (n=", ny, ")", sep="")
+pdf(paste (Misannotated_Sex_Check, "/01. DataCleaning-sex.pdf", sep=""), 7, 5)
+par(mfrow=c(2,2))
+plot(x1, y1, xlab=xintenlab, ylab=yintenlab,
+main=main1, col=xcol, cex.main=0.8)
+legend("topright",mf,col=cols,pch=c(1,1))
+plot(x2, y2, col=xcol, xlab=xintenlab, 
+ylab="X heterozygosity", main=main2, cex.main=0.8)
+plot(x3, y3, col=xcol, ylab=yintenlab,
+xlab="X heterozygosity", main=main3, cex.main=0.8)
+plot(x4,y4, col="red", xlab="Autosomal heterozygosity",
+ylab="X heterozygosity", main=main4, cex.main=0.8)
+dev.off()
+
+
+# Chromosome Anomaly Detection
+# This step looks for large chromosomal anomalies that may be filtered out during the final analysis.
+
+	# Create a folders
+CaseControl_Confounding <- paste(path_outputs,"/CaseControl_Confounding", sep="") 
+dir.create(CaseControl_Confounding)
+Missing_Call_Rate_Differences  <- paste(CaseControl_Confounding,"/Missing_Call_Rate_Differences", sep="") 
+dir.create(Missing_Call_Rate_Differences)
+
+
+
+######### Population stratification analysis
+
+	# Create a folders for stratification analysis outputs
+path_stratification_analysis <- paste(path_outputs,"/stratification_analysis", sep="") 
+dir.create(path_stratification_analysis)
+	# Multiple correspondence analysis before filter
+		# Data base
+data_concatenar <- FinalReport[,c(1,2,7,8)]
+    # Merge columns of genotypes
+data_concatenar <- data.frame(data_concatenar[,1:2], Genotype = paste(data_concatenar[,3], data_concatenar[,4], sep=''))
+		# Convert AA, AB y BB into 0, 1 y 2
+data.ch <- as.character(data_concatenar[, 3])
+Genotype <- replace(data.ch,which(data.ch=="AA"),2)
+Genotype <- replace(Genotype,which(data.ch=="AB"),1)
+Genotype <- replace(Genotype,which(data.ch=="BB"),0)
+Genotype <- replace(Genotype,which(data.ch=="--"),NA)
+    # Database
+data_210 <- data.frame(data_concatenar[1:2], Genotype = Genotype)
+		# Transpose database: SNPs in columns and individuals in rows
+data_split <- data.frame(subjectID = unique(data_210$Sample.ID), split(data_210$Genotype, f = data_210$SNP.Name)) # Los individuos que inician con número los renombra anteponiendo una X
+    # Export and import
+write.table(data_split, file = "data_split.txt") 
+data_split <- read.table("data_split.txt", header = TRUE, na.strings = TRUE)
+		# Merge whit genetic_origin
+data_origin <- merge (x = Scan_Annotation_Data_Frame_scanID[2:3], y = data_split, by = "subjectID") 
+		# Remove columns
+data_origin <- data_origin [,-c(1)] 
+		# Export and import
+write.table(data_origin, file = "data_origin.txt") # exportar datos como txt para evitar error "length of 'dimnames' [2] not equal to array extent"
+data_origin_imp <- read.table("data_origin.txt", header = TRUE, na.strings = TRUE) # Cargar datos nuevamente
+data_origin_imp2 <- data.frame(apply(data_origin_imp, 2, as.factor)) # convertir todas las variables en factores
+		# Multiple correspondence analysis
+library(ade4)
+acm_origin <- dudi.acm(data_origin_imp2, row.w = rep(1, nrow(data_origin_imp2)), scan = FALSE, nf =2)
+      # Export acm result
+set.seed(1)
+pdf(paste (path_stratification_analysis, "/01. Stratification_analysis_before_filtering.pdf", sep=""), 7, 5)
+s.class(acm_origin$li,data_origin_imp2$genetic_origin)
+dev.off()
+
+	# Filter SNPs associated to genetic origin
+gdsfile <- "tmp.geno.gds"
+gds <- GdsGenotypeReader(gdsfile)
+gds@autosomeCode <- as.integer(c(1:29))
+gds@XchromCode <- as.integer(30)
+gds@XYchromCode <- as.integer(31)
+gds@YchromCode <- as.integer(32)
+gds@MchromCode <- as.integer(33)
+genoData <- GenotypeData(gds, snpAnnot=snpAnnot, scanAnnot=scanAnnot)
+		# Association analysis
+Aso_Orig<-assocRegression(genoData,
+outcome = "genetic_origin_number",
+model.type = c("linear"), 
+gene.action = NULL, 
+covar = NULL,
+ivar = NULL,
+scan.exclude = NULL,
+CI = 0.95,
+robust = FALSE,
+LRtest = FALSE,
+PPLtest = TRUE,
+effectAllele = NULL, 
+snpStart = 1,
+snpEnd = 29794, 
+block.size = 5000,
+verbose = TRUE)
+		# Manhattan Plot
+signif=1e-7
+set.seed(1)
+pdf(paste (path_stratification_analysis, "/02. Manhattan_Plot_beforer_filtering.pdf", sep=""), 7, 5)
+manhattanPlot(Aso_Orig$Wald.pval, Aso_Orig$chr, signif=signif)
+dev.off()
+		# Remove SNPs associated to genetic origin
+Aso_Orig_sort <- sort(Aso_Orig$Wald.pval)
+SNP_origin <- Aso_Orig [Aso_Orig$Wald.pval <= signif,] 
+SNP_no_origin <- Aso_Orig [Aso_Orig$Wald.pval > signif,]
+signif=1e-7
+set.seed(1)
+pdf(paste (path_stratification_analysis, "/03. Manhattan_Plot_after_filtering.pdf", sep=""), 7, 5)
+manhattanPlot(SNP_no_origin$Wald.pval, SNP_no_origin$chr, signif=signif)
+dev.off()
+		# Stratification analysis after remove SNPs associated to origin
+			# remove columns of snpID. 		
+SNP_a_eliminar <- unique(SNP_origin$snpID) 
+SNP_a_eliminar <- data.frame ("snpID" = SNP_a_eliminar [ !is.na(SNP_a_eliminar)] )
+SNP_a_eliminar <- merge (x = SNP_a_eliminar, y = snp_annot_data_frame_snpID [1:2], by = "snpID")
+write.table(SNP_a_eliminar, file = paste (path_stratification_analysis, "/04. SNP_asociados_a_origen.txt", sep=""), sep = " ", eol = "\n", na = "NA", dec = ".", row.names = FALSE, col.names = TRUE, qmethod = c("escape", "double"), fileEncoding = "")
+			# Identify columns with SNPs to eliminar
+				# Transform names to match with columns of "data_origin_imp2"
+name_SNP_a_eliminar <- gsub ("-", ".", SNP_a_eliminar[,2])
+				# Identify the number of columns of SNPs to remove
+col_SNP_a_eliminar <-  match(name_SNP_a_eliminar, names(data_origin_imp2))
+			# Remove columns with SNPs associated to genetic origen
+data_snp_origin <- data_origin_imp2 [ , -col_SNP_a_eliminar]
+			# Stratification analysis after remove SNPs
+library(ade4)
+acm_origin <- dudi.acm(data_snp_origin, row.w = rep(1, nrow(data_snp_origin)), scan = FALSE, nf =2)
+			#print and store
+set.seed(1)
+pdf(paste (path_stratification_analysis, "/05. Stratification_analysis_after_filtering.pdf", sep=""), 7, 5)
+s.class(acm_origin$li,data_origin_imp2$genetic_origin)
+dev.off()
+
+
+############ GWAS
+	# GWAS_Categorical_trait
+GWAS_Categorical_trait<-assocRegression(genoData, 
+outcome = "Categorical_trait",
+model.type = c("logistic"),
+gene.action = NULL, 
+covar = NULL,
+ivar = NULL,
+scan.exclude = NULL,
+CI = 0.95,
+robust = FALSE,
+LRtest = FALSE,
+PPLtest = TRUE,
+effectAllele = NULL,
+snpStart = 1,
+snpEnd = 29794, 
+block.size = 5000,
+verbose = TRUE)
+			
+	# GWAS_Continuous_trait
+GWAS_Continuous_trait<-assocRegression(genoData, 
+outcome = "Continuous_trait",
+model.type = c("linear"),
+gene.action = NULL, 
+covar = NULL,
+ivar = NULL,
+scan.exclude = NULL,
+CI = 0.95,
+robust = FALSE,
+LRtest = FALSE,
+PPLtest = TRUE,
+effectAllele = NULL,
+snpStart = 1,
+snpEnd = 29794, 
+block.size = 5000,
+verbose = TRUE)
+			
+  # Adjust P-values with multiple comparision
+P_adjust <- p.adjust(GWAS_Categorical_trait$Wald.pval, 
+                     method = "bonferroni",
+                     n = length(GWAS_Categorical_trait$Wald.pval))
+GWAS_Categorical_trait <- data.frame(GWAS_Categorical_trait, P_adjust = P_adjust)
+
+P_adjust <- p.adjust(GWAS_Continuous_trait$Wald.pval, 
+                     method = "fdr",
+                     n = length(GWAS_Continuous_trait$Wald.pval))
+GWAS_Continuous_trait <- data.frame(GWAS_Continuous_trait, P_adjust = P_adjust)
+
+
+	# Export results: 
+		# Create a folders for association analysis
+association_analysis <- paste(path_outputs,"/association_analysis", sep="") 
+dir.create(association_analysis)
+		# Hacer la lista de asociaciones
+Aso_list <- list(GWAS_Categorical_trait, GWAS_Continuous_trait)
+		# Hacer la lista de nombres de asociaciones
+Aso_list_names <- c("GWAS_Categorical_trait", "GWAS_Continuous_trait")
+		# Significancia del manhattan plot
+signif=1e-5   ################## Lo debe dar el usurio. Por defecto ttrabajar con 1e-7
+		# Tabla de asociación
+for (i in seq (from=1, to=length(Aso_list))){
+write.table(Aso_list[[i]], file = paste (association_analysis, "/", Aso_list_names[i],"-assocRegression.txt", sep=""), sep = " ", eol = "\n", na = "NA", dec = ".", row.names = FALSE, col.names = TRUE, qmethod = c("escape", "double"), fileEncoding = "")
+}
+		# Manhattan plots
+pdf(paste (association_analysis, "/", "Categorical_trait-Manhattan_Plot.pdf", sep=""), 7, 5)
+manhattanPlot(p = GWAS_Categorical_trait$P_adjust,
+              chromosome = GWAS_Categorical_trait$chr,
+              signif = signif)
+dev.off()
+
+pdf(paste (association_analysis, "/", "Continuous_trait-Manhattan_Plot.pdf", sep=""), 7, 5)
+manhattanPlot(p = GWAS_Continuous_trait$P_adjust,
+              chromosome = GWAS_Continuous_trait$chr,
+              signif = signif)
+dev.off()
+
+		# Lista de SNPs asociados
+			# List of associated SNPs
+        # Categoricaltrait
+SNP_Categorical_trait <- GWAS_Categorical_trait[GWAS_Categorical_trait$P_adjust <= signif,]
+SNP_Categorical_trait <- SNP_Categorical_trait[!is.na(SNP_Categorical_trait$Wald.pval),]
+          # Complit table with more information of the SNP
+SNP_Categorical_trait <- merge(x=SNP_Categorical_trait, y=snp_annot_data_frame_snpID, by = "snpID")
+write.table(SNP_Categorical_trait, file = paste (association_analysis, "/", "SNP_Categorical_trait.txt", sep=""), sep = " ", eol = "\n", na = "NA", dec = ".", row.names = FALSE, col.names = TRUE, qmethod = c("escape", "double"), fileEncoding = "")
+        # Continuous trait
+SNP_Continuous_trait <- GWAS_Continuous_trait[GWAS_Continuous_trait$P_adjust <= signif,]
+SNP_Continuous_trait <- SNP_Continuous_trait[!is.na(SNP_Continuous_trait$Wald.pval),]
+        # Complit table with more information of the SNP
+SNP_Continuous_trait <- merge(x=SNP_Continuous_trait, y=snp_annot_data_frame_snpID, by = "snpID")
+write.table(SNP_Continuous_trait, file = paste (association_analysis, "/", "SNP_Continuous_trait.txt", sep=""), sep = " ", eol = "\n", na = "NA", dec = ".", row.names = FALSE, col.names = TRUE, qmethod = c("escape", "double"), fileEncoding = "")
+
+
+# Post-GWAS analysis
+  # Create a folders for association analysis
+Post_GWAS_analysis <- paste(path_outputs,"/Post_GWAS_analysis", sep="") 
+dir.create(Post_GWAS_analysis)
+  # NCBI's databases use
+genomic_region <- entrez_search(db="snp", term="BovineHD0600000810")
