@@ -3,17 +3,32 @@ library (GWASTools)
 library (plyr) 
 library(SNPRelate)
 library(ade4)
-library(rentrez)
 
-######### Manual inputing ########
-# Indicating the path where are stored the genotypes. The user has store all and only the compressed files provided by Illumina in a same folder. path.files is the pathname of this folder. 
+######### User input ##########
+
+  # Path where are stored the genotypes. The user must store all and only the compressed files provided by Illumina in a same folder. path.files is the pathname of this folder. 
 path.folders = "../Data"
-
-# Inputing phenotypes, pedigree and environmental conditions into the object Scan Annotation Data Frame. The files must to be ".csv" and have to be into the folder "Data".
+  # File with phenotypes, pedigree and environmental conditions into the object Scan Annotation Data Frame. The files must are into the folder "Data" with the .csv extention.
 Scan_Annotation_Data_Frame = read.csv(file= "../Data/Scan Annotation Data Frame Toy Data.csv", header = TRUE, sep=",")
-
-# Indicating the number of autosomes of the specie
+  # Number of autosomes of the specie
 autosomes <- 29
+  # Total number of SNPs in autosomes
+num_SNP_auto = 29794
+  # Significance of population stratification's manhattan plot
+pop_signif = 1e-7
+  # GWAS parameters
+    # Column name of the phenotype of interest
+outcome = "Continuous_trait"
+    # Model type. Can be linear or logistic
+model.type = "linear"
+    # Confidence interval
+CI = 0.95
+    # Number of SNPs to read in at once
+block.size = 5000
+  # Multiple comparision test. fdr or bonferroni
+method = "fdr"
+  # Manhattan plot significance
+signif = 1e-5 
 
 #################
 
@@ -161,13 +176,14 @@ snp_annot_data_frame_snpID <- data.frame(
 snpID = snpID,
 snp_annot_data_frame)
 		#  Creating the SNP Annotation Data Object.
+autosomes <- as.integer(autosomes)
 snpAnnot <- SnpAnnotationDataFrame(
-snp_annot_data_frame_snpID, 
-autosomeCode = 1:29L,
-XchromCode = 30L,
-XYchromCode = 31L,
-YchromCode = 32L,
-MchromCode = 33L)
+  snp_annot_data_frame_snpID, 
+  autosomeCode = 1:autosomes,
+  XchromCode = as.integer(autosomes+1),
+  XYchromCode = as.integer(autosomes+2),
+  YchromCode = as.integer(autosomes+3),
+  MchromCode = as.integer(autosomes+4))
 		# Following. Add metadata to describe the columns snpAnnot. The user provides this part
 meta <- varMetadata(snpAnnot)
 meta[c("snpID", "snpName", "chromosome", "position", "alleleA", "alleleB",
@@ -341,11 +357,11 @@ verbose = FALSE)
 		# Initializing GdsGenotypeReader file
 (gds <- GdsGenotypeReader(geno.file))
 		# Changing chromosome codes from human to cattle
-gds@autosomeCode <- as.integer(c(1:29))
-gds@XchromCode <- as.integer(30)
-gds@XYchromCode <- as.integer(31)
-gds@YchromCode <- as.integer(32)
-gds@MchromCode <- as.integer(33)
+gds@autosomeCode <- as.integer(c(1:autosomes))
+gds@XchromCode <- as.integer(autosomes+1)
+gds@XYchromCode <- as.integer(autosomes+2)
+gds@YchromCode <- as.integer(autosomes+3)
+gds@MchromCode <- as.integer(autosomes+4)
 		# Creating genoData
 genoData <- GenotypeData(gds, snpAnnot=snpAnnot, scanAnnot=scanAnnot)
 
@@ -353,11 +369,11 @@ genoData <- GenotypeData(gds, snpAnnot=snpAnnot, scanAnnot=scanAnnot)
 		# Initializing GdsGenotypeReader file
 (gds <- GdsIntensityReader(qxy.file))
 		# Changing chromosome codes from human to cattle
-gds@autosomeCode <- as.integer(c(1:29))
-gds@XchromCode <- as.integer(30)
-gds@XYchromCode <- as.integer(31)
-gds@YchromCode <- as.integer(32)
-gds@MchromCode <- as.integer(33)
+gds@autosomeCode <- as.integer(c(1:autosomes))
+gds@XchromCode <- as.integer(autosomes+1)
+gds@XYchromCode <- as.integer(autosomes+2)
+gds@YchromCode <- as.integer(autosomes+3)
+gds@MchromCode <- as.integer(autosomes+4)
 		# Creating IntensityData
 qxyData <- IntensityData(gds, snpAnnot=snpAnnot, scanAnnot=scanAnnot)
 close(gds)
@@ -366,11 +382,11 @@ close(gds)
 		# Initializing GdsGenotypeReader file
 (gds <- GdsIntensityReader(bl.file))
 		# Changing chromosome codes from human to cattle
-gds@autosomeCode <- as.integer(c(1:29))
-gds@XchromCode <- as.integer(30)
-gds@XYchromCode <- as.integer(31)
-gds@YchromCode <- as.integer(32)
-gds@MchromCode <- as.integer(33)
+gds@autosomeCode <- as.integer(c(1:autosomes))
+gds@XchromCode <- as.integer(autosomes+1)
+gds@XYchromCode <- as.integer(autosomes+2)
+gds@YchromCode <- as.integer(autosomes+3)
+gds@MchromCode <- as.integer(autosomes+4)
 blData <- IntensityData(gds, snpAnnot=snpAnnot, scanAnnot=scanAnnot)
 close(blData)
 
@@ -651,18 +667,18 @@ dir.create(sample_missingness_and_heterozygosities)
 
 	# Checking for outliers in quality score
 qualGDS <- GdsIntensityReader(qxy.file)
-qualGDS@autosomeCode <- as.integer(c(1:29))
-qualGDS@XchromCode <- as.integer(30)
-qualGDS@XYchromCode <- as.integer(31)
-qualGDS@YchromCode <- as.integer(32)
-qualGDS@MchromCode <- as.integer(33)
+qualGDS@autosomeCode <- as.integer(c(1:autosomes))
+qualGDS@XchromCode <- as.integer(autosomes+1)
+qualGDS@XYchromCode <- as.integer(autosomes+2)
+qualGDS@YchromCode <- as.integer(autosomes+3)
+qualGDS@MchromCode <- as.integer(autosomes+4)
 qualData <- IntensityData(qualGDS, scanAnnot=scanAnnot)
 genoGDS <- GdsGenotypeReader(geno.file)
-genoGDS@autosomeCode <- as.integer(c(1:29))
-genoGDS@XchromCode <- as.integer(30)
-genoGDS@XYchromCode <- as.integer(31)
-genoGDS@YchromCode <- as.integer(32)
-genoGDS@MchromCode <- as.integer(33)
+genoGDS@autosomeCode <- as.integer(c(1:autosomes))
+genoGDS@XchromCode <- as.integer(autosomes+1)
+genoGDS@XYchromCode <- as.integer(autosomes+2)
+genoGDS@YchromCode <- as.integer(autosomes+3)
+genoGDS@MchromCode <- as.integer(autosomes+4)
 genoData <- GenotypeData(genoGDS, scanAnnot=scanAnnot)
 qual.results <- qualityScoreByScan(qualData, genoData)
 close(qualData)
@@ -674,11 +690,11 @@ dev.off()
 	# B Allele Frequency variance analysis
 		# Creating a list of matrices, with one matrix for each chromosome containing the standard deviation of BAF at each window in each scan
 blGDS <- GdsIntensityReader(bl.file)
-blGDS@autosomeCode <- as.integer(c(1:29))
-blGDS@XchromCode <- as.integer(30)
-blGDS@XYchromCode <- as.integer(31)
-blGDS@YchromCode <- as.integer(32)
-blGDS@MchromCode <- as.integer(33)
+blGDS@autosomeCode <- as.integer(c(1:autosomes))
+blGDS@XchromCode <- as.integer(autosomes+1)
+blGDS@XYchromCode <- as.integer(autosomes+2)
+blGDS@YchromCode <- as.integer(autosomes+3)
+blGDS@MchromCode <- as.integer(autosomes+4)
 blData <- IntensityData(blGDS, snpAnnot=snpAnnot, scanAnnot=scanAnnot)
 nbins <- rep(12, 30) 
 slidingBAF12 <- sdByScanChromWindow(blData, genoData, nbins=nbins)
@@ -743,19 +759,19 @@ dir.create(Misannotated_Sex_Check)
 	# Mis-annotated Sex Check
 	# The objective is to identify any sex mis-annotation or sex chromosome aneuploidies. "The fourth plot applies to annotated females only, since males are expected to have zero heterozygosity on the X chromosome."
 intenGDS <- GdsIntensityReader(qxy.file)
-intenGDS@autosomeCode<- as.integer(c(1:29))
-intenGDS@XchromCode <- as.integer(30)
-intenGDS@XYchromCode <- as.integer(31)
-intenGDS@YchromCode <- as.integer(32)
-intenGDS@MchromCode <- as.integer(33)
+intenGDS@autosomeCode<- as.integer(c(1:autosomes))
+intenGDS@XchromCode <- as.integer(autosomes+1)
+intenGDS@XYchromCode <- as.integer(autosomes+2)
+intenGDS@YchromCode <- as.integer(autosomes+3)
+intenGDS@MchromCode <- as.integer(autosomes+4)
 inten.by.chrom <- meanIntensityByScanChrom(intenGDS)
 close(intenGDS)
 mninten <- inten.by.chrom[[1]]
 xcol <- rep(NA, nrow(scanAnnot))
 xcol[scanAnnot$sex == "M"] <- "blue"
 xcol[scanAnnot$sex == "F"] <- "red"
-nx <- sum(snpAnnot$chromosome == 30) 
-ny <- sum(snpAnnot$chromosome == 32) 
+nx <- sum(snpAnnot$chromosome == autosomes+1) 
+ny <- sum(snpAnnot$chromosome == autosomes+2) 
 		#All intensities
 x1 <-mninten[,"X"]; y1 <- mninten[,"Y"]
 main1 <- "Mean X vs \nMean Y Chromosome Intensity"
@@ -844,43 +860,41 @@ dev.off()
 	# Filter SNPs associated to genetic origin
 gdsfile <- "tmp.geno.gds"
 gds <- GdsGenotypeReader(gdsfile)
-gds@autosomeCode <- as.integer(c(1:29))
-gds@XchromCode <- as.integer(30)
-gds@XYchromCode <- as.integer(31)
-gds@YchromCode <- as.integer(32)
-gds@MchromCode <- as.integer(33)
+gds@autosomeCode <- as.integer(c(1:autosomes))
+gds@XchromCode <- as.integer(autosomes+1)
+gds@XYchromCode <- as.integer(autosomes+2)
+gds@YchromCode <- as.integer(autosomes+3)
+gds@MchromCode <- as.integer(autosomes+4)
 genoData <- GenotypeData(gds, snpAnnot=snpAnnot, scanAnnot=scanAnnot)
 		# Association analysis
 Aso_Orig<-assocRegression(genoData,
-outcome = "genetic_origin_number",
-model.type = c("linear"), 
+outcome = outcome,
+model.type = model.type, 
 gene.action = NULL, 
 covar = NULL,
 ivar = NULL,
 scan.exclude = NULL,
-CI = 0.95,
+CI = CI,
 robust = FALSE,
 LRtest = FALSE,
 PPLtest = TRUE,
 effectAllele = NULL, 
 snpStart = 1,
-snpEnd = 29794, 
-block.size = 5000,
+snpEnd = num_SNP_auto, 
+block.size = block.size,
 verbose = TRUE)
 		# Manhattan Plot
-signif=1e-7
 set.seed(1)
 pdf(paste (path_stratification_analysis, "/02. Manhattan_Plot_beforer_filtering.pdf", sep=""), 7, 5)
-manhattanPlot(Aso_Orig$Wald.pval, Aso_Orig$chr, signif=signif)
+manhattanPlot(Aso_Orig$Wald.pval, Aso_Orig$chr, signif=pop_signif)
 dev.off()
 		# Remove SNPs associated to genetic origin
 Aso_Orig_sort <- sort(Aso_Orig$Wald.pval)
-SNP_origin <- Aso_Orig [Aso_Orig$Wald.pval <= signif,] 
-SNP_no_origin <- Aso_Orig [Aso_Orig$Wald.pval > signif,]
-signif=1e-7
+SNP_origin <- Aso_Orig [Aso_Orig$Wald.pval <= pop_signif,] 
+SNP_no_origin <- Aso_Orig [Aso_Orig$Wald.pval > pop_signif,]
 set.seed(1)
 pdf(paste (path_stratification_analysis, "/03. Manhattan_Plot_after_filtering.pdf", sep=""), 7, 5)
-manhattanPlot(SNP_no_origin$Wald.pval, SNP_no_origin$chr, signif=signif)
+manhattanPlot(SNP_no_origin$Wald.pval, SNP_no_origin$chr, signif=pop_signif)
 dev.off()
 		# Stratification analysis after remove SNPs associated to origin
 			# remove columns of snpID. 		
@@ -905,101 +919,50 @@ s.class(acm_origin$li,data_origin_imp2$genetic_origin)
 dev.off()
 
 
-############ GWAS
-	# GWAS_Categorical_trait
-GWAS_Categorical_trait<-assocRegression(genoData, 
-outcome = "Categorical_trait",
-model.type = c("logistic"),
+# GWAS
+GWAS<-assocRegression(genoData, 
+outcome = outcome,
+model.type = model.type,
 gene.action = NULL, 
 covar = NULL,
 ivar = NULL,
 scan.exclude = NULL,
-CI = 0.95,
+CI = CI,
 robust = FALSE,
 LRtest = FALSE,
 PPLtest = TRUE,
 effectAllele = NULL,
 snpStart = 1,
-snpEnd = 29794, 
-block.size = 5000,
+snpEnd = num_SNP_auto, 
+block.size = block.size,
 verbose = TRUE)
-			
-	# GWAS_Continuous_trait
-GWAS_Continuous_trait<-assocRegression(genoData, 
-outcome = "Continuous_trait",
-model.type = c("linear"),
-gene.action = NULL, 
-covar = NULL,
-ivar = NULL,
-scan.exclude = NULL,
-CI = 0.95,
-robust = FALSE,
-LRtest = FALSE,
-PPLtest = TRUE,
-effectAllele = NULL,
-snpStart = 1,
-snpEnd = 29794, 
-block.size = 5000,
-verbose = TRUE)
-			
+
   # Adjust P-values with multiple comparision
-P_adjust <- p.adjust(GWAS_Categorical_trait$Wald.pval, 
-                     method = "bonferroni",
-                     n = length(GWAS_Categorical_trait$Wald.pval))
-GWAS_Categorical_trait <- data.frame(GWAS_Categorical_trait, P_adjust = P_adjust)
-
-P_adjust <- p.adjust(GWAS_Continuous_trait$Wald.pval, 
-                     method = "fdr",
-                     n = length(GWAS_Continuous_trait$Wald.pval))
-GWAS_Continuous_trait <- data.frame(GWAS_Continuous_trait, P_adjust = P_adjust)
-
+P_adjust <- p.adjust(GWAS$Wald.pval, 
+                     method = method,
+                     n = length(GWAS$Wald.pval))
+GWAS_P_adjust <- data.frame(GWAS, P_adjust = P_adjust)
 
 	# Export results: 
 		# Create a folders for association analysis
 association_analysis <- paste(path_outputs,"/association_analysis", sep="") 
 dir.create(association_analysis)
-		# Hacer la lista de asociaciones
-Aso_list <- list(GWAS_Categorical_trait, GWAS_Continuous_trait)
-		# Hacer la lista de nombres de asociaciones
-Aso_list_names <- c("GWAS_Categorical_trait", "GWAS_Continuous_trait")
-		# Significancia del manhattan plot
-signif=1e-5   ################## Lo debe dar el usurio. Por defecto ttrabajar con 1e-7
-		# Tabla de asociación
-for (i in seq (from=1, to=length(Aso_list))){
-write.table(Aso_list[[i]], file = paste (association_analysis, "/", Aso_list_names[i],"-assocRegression.txt", sep=""), sep = " ", eol = "\n", na = "NA", dec = ".", row.names = FALSE, col.names = TRUE, qmethod = c("escape", "double"), fileEncoding = "")
-}
-		# Manhattan plots
-pdf(paste (association_analysis, "/", "Categorical_trait-Manhattan_Plot.pdf", sep=""), 7, 5)
-manhattanPlot(p = GWAS_Categorical_trait$P_adjust,
-              chromosome = GWAS_Categorical_trait$chr,
+		# Export association dataframe
+write.table(GWAS_P_adjust,
+            file = paste (association_analysis, "/", outcome,"-assocRegression.txt", sep=""), 
+            sep = " ", eol = "\n", na = "NA", dec = ".", row.names = FALSE, col.names = TRUE, 
+            qmethod = c("escape", "double"), fileEncoding = "")
+
+		# Manhattan plot
+pdf(paste (association_analysis, "/", "Manhattan_Plot.pdf", sep=""), 7, 5)
+manhattanPlot(p = GWAS_P_adjust$P_adjust,
+              chromosome = GWAS_P_adjust$chr,
               signif = signif)
 dev.off()
 
-pdf(paste (association_analysis, "/", "Continuous_trait-Manhattan_Plot.pdf", sep=""), 7, 5)
-manhattanPlot(p = GWAS_Continuous_trait$P_adjust,
-              chromosome = GWAS_Continuous_trait$chr,
-              signif = signif)
-dev.off()
-
-		# Lista de SNPs asociados
-			# List of associated SNPs
-        # Categoricaltrait
-SNP_Categorical_trait <- GWAS_Categorical_trait[GWAS_Categorical_trait$P_adjust <= signif,]
-SNP_Categorical_trait <- SNP_Categorical_trait[!is.na(SNP_Categorical_trait$Wald.pval),]
-          # Complit table with more information of the SNP
-SNP_Categorical_trait <- merge(x=SNP_Categorical_trait, y=snp_annot_data_frame_snpID, by = "snpID")
-write.table(SNP_Categorical_trait, file = paste (association_analysis, "/", "SNP_Categorical_trait.txt", sep=""), sep = " ", eol = "\n", na = "NA", dec = ".", row.names = FALSE, col.names = TRUE, qmethod = c("escape", "double"), fileEncoding = "")
-        # Continuous trait
-SNP_Continuous_trait <- GWAS_Continuous_trait[GWAS_Continuous_trait$P_adjust <= signif,]
-SNP_Continuous_trait <- SNP_Continuous_trait[!is.na(SNP_Continuous_trait$Wald.pval),]
-        # Complit table with more information of the SNP
-SNP_Continuous_trait <- merge(x=SNP_Continuous_trait, y=snp_annot_data_frame_snpID, by = "snpID")
-write.table(SNP_Continuous_trait, file = paste (association_analysis, "/", "SNP_Continuous_trait.txt", sep=""), sep = " ", eol = "\n", na = "NA", dec = ".", row.names = FALSE, col.names = TRUE, qmethod = c("escape", "double"), fileEncoding = "")
-
-
-# Post-GWAS analysis
-  # Create a folders for association analysis
-Post_GWAS_analysis <- paste(path_outputs,"/Post_GWAS_analysis", sep="") 
-dir.create(Post_GWAS_analysis)
-  # NCBI's databases use
-genomic_region <- entrez_search(db="snp", term="BovineHD0600000810")
+		# SNPs associated list
+Associated_SNPs <- GWAS_P_adjust[GWAS_P_adjust$P_adjust <= signif,]
+Associated_SNPs <- Associated_SNPs[!is.na(Associated_SNPs$Wald.pval),]
+      # Complit data frame with more information of the SNP
+Associated_SNPs <- merge(x = Associated_SNPs, y = snp_annot_data_frame_snpID, by = "snpID")
+write.table(Associated_SNPs, file = paste (association_analysis, "/", "Associated_SNPs.txt", sep=""), sep = " ", eol = "\n", na = "NA", dec = ".", row.names = FALSE, col.names = TRUE, qmethod = c("escape", "double"), fileEncoding = "")
